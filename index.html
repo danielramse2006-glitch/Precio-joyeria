@@ -13,7 +13,7 @@
         input:focus { border-color: #007bff; }
         button { width: 100%; padding: 15px; background-color: #007bff; color: white; border: none; border-radius: 10px; font-size: 18px; cursor: pointer; font-weight: bold; }
         button:hover { background-color: #0056b3; }
-        #resultado { margin-top: 30px; padding: 15px; border-radius: 10px; font-size: 22px; font-weight: bold; min-height: 50px; }
+        #resultado { margin-top: 30px; padding: 15px; border-radius: 10px; font-size: 18px; font-weight: bold; min-height: 50px; white-space: pre-line; }
         .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
     </style>
@@ -30,26 +30,44 @@
 <script>
     let productos = [];
 
-    // 1. CARGAR EL EXCEL AUTOMÁTICAMENTE
-    // Cambia 'lista.xlsx' por el nombre real de tu archivo en GitHub
     fetch('precios.xlsx') 
         .then(res => res.arrayBuffer())
         .then(data => {
             const workbook = XLSX.read(data, { type: 'array' });
-            // Leemos todas las hojas por si acaso
+            
             workbook.SheetNames.forEach(sheetName => {
                 const sheet = workbook.Sheets[sheetName];
                 const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
                 
-                // Procesar las columnas de tu archivo (CODIGO, material, Lista)
+                // CONDICIONAL: ¿Es la hoja Tabla 6?
+                const esTabla6 = (sheetName.trim().toLowerCase() === "tabla 6");
+
                 json.forEach(fila => {
-                    // Tu archivo tiene 3 columnas repetidas, las recorremos
-                    for (let i = 0; i < fila.length; i += 3) {
-                        if (fila[i] && fila[i+2]) {
-                            productos.push({
-                                codigo: String(fila[i]).trim().toUpperCase(),
-                                precio: fila[i+2]
-                            });
+                    if (esTabla6) {
+                        // SI ES TABLA 6: Buscamos el código en cualquier parte de la fila y guardamos todo
+                        fila.forEach(celda => {
+                            if (celda) {
+                                // Intentamos extraer el primer código de la celda (asumiendo que empieza con el código)
+                                let contenido = String(celda).trim();
+                                let codigoExtraido = contenido.split(/\s+/)[0].toUpperCase(); 
+                                
+                                productos.push({
+                                    codigo: codigoExtraido,
+                                    datoCompleto: contenido,
+                                    tipo: 'completo'
+                                });
+                            }
+                        });
+                    } else {
+                        // SI NO ES TABLA 6: Usamos tu lógica original de 3 columnas
+                        for (let i = 0; i < fila.length; i += 3) {
+                            if (fila[i] && fila[i+2]) {
+                                productos.push({
+                                    codigo: String(fila[i]).trim().toUpperCase(),
+                                    precio: fila[i+2],
+                                    tipo: 'precio'
+                                });
+                            }
                         }
                     }
                 });
@@ -64,13 +82,19 @@
 
         if (!codigoBuscado) return;
 
-        const encontrado = productos.find(p => p.codigo === codigoBuscado);
+        // Buscamos coincidencia exacta o que el contenido empiece por ese código
+        const encontrado = productos.find(p => p.codigo === codigoBuscado || (p.tipo === 'completo' && p.datoCompleto.toUpperCase().startsWith(codigoBuscado)));
 
         if (encontrado) {
             display.className = "success";
-            display.innerHTML = `Precio: $${encontrado.precio}`;
             
-            // Bloquear como pediste en los requisitos
+            // Si viene de Tabla 6, mostramos todo el registro, si no, solo el precio
+            if (encontrado.tipo === 'completo') {
+                display.innerHTML = encontrado.datoCompleto;
+            } else {
+                display.innerHTML = `Precio: $${encontrado.precio}`;
+            }
+            
             input.disabled = true;
             document.querySelector('button').disabled = true;
         } else {
